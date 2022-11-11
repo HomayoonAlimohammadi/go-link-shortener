@@ -1,19 +1,34 @@
-package linkshortener
+package main
 
 import (
 	"log"
 	"os"
 
+	"github.com/homayoonalimohammadi/go-link-shortener/linkshortener/internal/app/database"
+	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+type Database interface {
+	GetUrl(string) (string, error)
+	GetToken(string) (string, error)
+	Save(string, string) error
+}
+
+type Config struct {
+	Author   string
+	UseViper bool
+	License  string
+	Postgres database.PostgresConfig
+}
 
 var (
 	// Used for flags.
 	cfgFile     string
 	userLicense string
-
-	rootCmd = &cobra.Command{
+	config      Config
+	rootCmd     = &cobra.Command{
 		Short: "Shortens any given link to a digestable token.",
 		Long: `Link Shortener is a web app to shorten any given link
 to a unique phrase so you can use that any where.`,
@@ -26,6 +41,8 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(versionCmd)
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is ./.cobra.yaml)")
@@ -36,6 +53,7 @@ func init() {
 	viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
 	viper.SetDefault("author", "Homayoon Alimohammadi <homayoonalimohammadi@gmail.com>")
 	viper.SetDefault("license", "MIT")
+
 }
 
 func initConfig() {
@@ -51,6 +69,7 @@ func initConfig() {
 		viper.AddConfigPath(currentDir)
 		viper.SetConfigType("yaml")
 		viper.SetConfigName(".cobra")
+		log.Println("reading config file from:", currentDir)
 	}
 
 	viper.AutomaticEnv()
@@ -58,4 +77,10 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		log.Println("Using config file:", viper.ConfigFileUsed())
 	}
+
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		log.Println("could not unmarshal config")
+	}
+	log.Printf("Config: %+v", config)
 }

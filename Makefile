@@ -1,4 +1,4 @@
-.PHONY: help deps build start clean 
+.PHONY: help deps build start test version clean 
 
 BINARY_NAME := linkshortener
 COVERAGE_PROFILE := c.out
@@ -15,11 +15,11 @@ deps:
 test: 
 	go test ./... -coverprofile ${COVERAGE_PROFILE}
 
-start:
-	go run main.go serve
+start: build
+	./${BINARY_NAME} serve
 
-version:
-	go run main.go version
+version: build
+	./${BINARY_NAME} version
 
 clean:
 	rm ${BINARY_NAME} ${COVERAGE_PROFILE}
