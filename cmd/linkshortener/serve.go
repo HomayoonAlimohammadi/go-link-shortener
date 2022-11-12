@@ -41,7 +41,10 @@ func serve(cmd *cobra.Command, args []string) {
 	defer postgresProvider.Close()
 
 	// do the migrations
-	postgresProvider.Migrate()
+	err = postgresProvider.Migrate()
+	if err != nil {
+		log.Println(err)
+	}
 
 	linkShortener.Postgres = postgresProvider
 
