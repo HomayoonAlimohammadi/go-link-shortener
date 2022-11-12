@@ -12,7 +12,7 @@ build: deps
 deps: 
 	go mod download
 
-test: 
+test: deps
 	go test ./... -coverprofile ${COVERAGE_PROFILE}
 
 start: build
@@ -23,3 +23,9 @@ version: build
 
 clean:
 	rm ${BINARY_NAME} ${COVERAGE_PROFILE}
+
+migrate_up: build
+	migrate -path internal/app/database/migrations -database "postgresql://postgres:postgres@localhost:5432/linkshortener?sslmode=disable" -verbose up
+
+migrate_down: build
+	echo "y" | migrate -path internal/app/database/migrations -database "postgresql://postgres:postgres@localhost:5432/linkshortener?sslmode=disable" -verbose down
