@@ -39,6 +39,10 @@ func serve(cmd *cobra.Command, args []string) {
 		log.Fatalf("could not initialize connection to postgres database: %s", err)
 	}
 	defer postgresProvider.Close()
+
+	// do the migrations
+	postgresProvider.Migrate()
+
 	linkShortener.Postgres = postgresProvider
 
 	// setup the router
