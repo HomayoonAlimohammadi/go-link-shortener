@@ -1,21 +1,35 @@
 package database
 
 import (
+	"context"
 	"database/sql"
-	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"strconv"
+	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // Needed by golang-migrate
 	_ "github.com/lib/pq"                                // Needed by golang-migrate
 )
 
+type Database interface {
+	GetUrl(string) (string, error)
+	GetToken(string) (string, error)
+	Save(string, string) error
+}
+
 type PostgresProvider struct {
 	Config PostgresConfig
 	DB     *sql.DB
+}
+
+type RedisProvider struct {
+	Config RedisConfig
+	DB     *redis.Client
 }
 
 type PostgresConfig struct {
@@ -28,7 +42,15 @@ type PostgresConfig struct {
 	MigrationsPath string
 }
 
-func (p *PostgresConfig) getURL() *url.URL {
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Password string
+	DB       int
+	Timeout  int
+}
+
+func (p *PostgresConfig) getUrl() *url.URL {
 	pgURL := &url.URL{
 		Scheme: "postgres",
 		User:   url.UserPassword(p.User, p.Password),
@@ -42,7 +64,7 @@ func (p *PostgresConfig) getURL() *url.URL {
 }
 
 func NewPostgresProvider(config PostgresConfig) (*PostgresProvider, error) {
-	pgURL := config.getURL()
+	pgURL := config.getUrl()
 	db, err := sql.Open("postgres", pgURL.String())
 	if err != nil {
 		return nil, err
@@ -62,7 +84,7 @@ func (p *PostgresProvider) GetUrl(token string) (string, error) {
 	var url string
 	if err := p.DB.QueryRow(query, token).Scan(&url); err != nil {
 		if err == sql.ErrNoRows {
-			return "", errors.New("no matching rows for the given token")
+			return "", ErrTokenNotFound
 		}
 		return "", err
 	}
@@ -74,7 +96,7 @@ func (p *PostgresProvider) GetToken(url string) (string, error) {
 	var token string
 	if err := p.DB.QueryRow(query, url).Scan(&token); err != nil {
 		if err == sql.ErrNoRows {
-			return "", errors.New("no matching rows for the given url")
+			return "", ErrUrlNotFound
 		}
 		return "", err
 	}
@@ -110,5 +132,50 @@ func (p *PostgresProvider) Migrate() error {
 	}
 
 	log.Println("successfully applied the migrations")
+	return nil
+}
+
+func NewRedisProvider(config RedisConfig) *RedisProvider {
+	opts := &redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", config.Host, config.Port),
+		Password: config.Password,
+		DB:       config.DB,
+	}
+	db := redis.NewClient(opts)
+	return &RedisProvider{
+		Config: config,
+		DB:     db,
+	}
+}
+
+func (p *RedisProvider) GetUrl(token string) (string, error) {
+	url, err := p.DB.Get(context.Background(), token).Result()
+	if err == redis.Nil {
+		return "", ErrUrlNotFound
+	} else if err != nil {
+		return "", err
+	}
+	return url, nil
+}
+
+func (p *RedisProvider) GetToken(url string) (string, error) {
+	token, err := p.DB.Get(context.Background(), url).Result()
+	if err == redis.Nil {
+		return "", ErrTokenNotFound
+	} else if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (p *RedisProvider) Save(url, token string) error {
+	_, err := p.DB.Set(context.Background(), token, url, time.Duration(p.Config.Timeout)*time.Second).Result()
+	if err != nil {
+		return err
+	}
+	_, err = p.DB.Set(context.Background(), url, token, time.Duration(p.Config.Timeout)*time.Second).Result()
+	if err != nil {
+		return err
+	}
 	return nil
 }

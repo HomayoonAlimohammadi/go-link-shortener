@@ -4,3 +4,4 @@ linkshortener
 .cobra.yaml
 .env
 pg_data/
+redis/

@@ -13,7 +13,7 @@ import (
 )
 
 type LinkShortenerBackend struct {
-	Postgres Database
+	Provider *database.LinkShortenerProvider
 }
 
 const (
@@ -21,8 +21,10 @@ const (
 )
 
 var (
-	linkShortener = &LinkShortenerBackend{}
-	serveCmd      = &cobra.Command{
+	linkShortener = &LinkShortenerBackend{
+		Provider: &database.LinkShortenerProvider{},
+	}
+	serveCmd = &cobra.Command{
 		Use:   "serve",
 		Short: "Serves the Link Shortener",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -31,6 +33,9 @@ var (
 	}
 )
 
+// initializing the service implementation and
+// setting up the providers
+// Note: providers order matters (first one to be added will be lookedup first)
 func serve(cmd *cobra.Command, args []string) {
 
 	// connect to the postgres database
@@ -41,9 +46,13 @@ func serve(cmd *cobra.Command, args []string) {
 	defer postgresProvider.Close()
 
 	// do the migrations
-	postgresProvider.Migrate()
+	err = postgresProvider.Migrate()
+	if err != nil {
+		log.Println(err)
+	}
 
-	linkShortener.Postgres = postgresProvider
+	// add postgresProvider
+	linkShortener.Provider.AddProvider(postgresProvider)
 
 	// setup the router
 	router := mux.NewRouter()
