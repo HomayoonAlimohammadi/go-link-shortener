@@ -10,17 +10,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Database interface {
-	GetUrl(string) (string, error)
-	GetToken(string) (string, error)
-	Save(string, string) error
-}
-
 type Config struct {
 	Author   string
 	UseViper bool
 	License  string
 	Postgres database.PostgresConfig
+	Redis    database.RedisConfig
 }
 
 var (

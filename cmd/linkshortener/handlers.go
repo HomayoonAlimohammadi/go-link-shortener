@@ -37,9 +37,9 @@ func getTokenStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// retrieve url from the given token
-	url, err := linkShortener.Postgres.GetUrl(token)
+	url, err := linkShortener.Provider.GetUrl(token)
 	if err != nil {
-		log.Println("unable to retrieve url from postgres:", err)
+		log.Println("unable to retrieve url from db:", err)
 		io.WriteString(w, "unable to retrieve token data")
 		return
 	}
@@ -49,8 +49,6 @@ func getTokenStats(w http.ResponseWriter, r *http.Request) {
 // Create unique token from the link given in the request body and returns it.
 // If the url already has a token, returns the token.
 func createToken(w http.ResponseWriter, r *http.Request) {
-	log.Println("creating the link given in the post request...")
-
 	// check for correct header
 	if r.Header.Get("Content-Type") != "" {
 		value, _ := header.ParseValueAndParams(r.Header, "Content-Type")
@@ -84,7 +82,7 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// save token in DB(s) asynchronously
-	err = linkShortener.Postgres.Save(url, token)
+	err = linkShortener.Provider.Save(url, token)
 	if err == nil {
 		log.Printf("saved token for \"%s\": %s", url, token)
 		io.WriteString(w, fmt.Sprintf("saved token for \"%s\": %s", url, token))
@@ -101,7 +99,7 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 
 	// handle unique_violation error and token retrieval
 	log.Println("attemped to save duplicate url or token")
-	token, err = linkShortener.Postgres.GetToken(url)
+	token, err = linkShortener.Provider.GetToken(url)
 	if err != nil {
 		http.Error(w, "something went wrong... try again later", http.StatusInternalServerError)
 		return
@@ -113,14 +111,13 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 // Resembles the main functionality of the app that by heading to the
 // https://<address>/<token> you will get redirected to the original url.
 func redirectToOriginal(w http.ResponseWriter, r *http.Request) {
-	log.Println("redirecting to the original link...")
 	vars := mux.Vars(r)
 	token, ok := vars["token"]
 	if !ok {
 		io.WriteString(w, "unable to extract token from the url")
 		return
 	}
-	url, err := linkShortener.Postgres.GetUrl(token)
+	url, err := linkShortener.Provider.GetUrl(token)
 	if err != nil {
 		io.WriteString(w, "no url is registered for this token")
 		return
